@@ -67,17 +67,17 @@ class MAACO:
                 else:
                     dsi = self._distance(self.start_node, current_node)
                     diT = self._distance(current_node, self.target_node)
-                    
+
                     denominator = dsi + diT
-                    if denominator < 1e-9: 
+                    if denominator < 1e-9:
                         if self._distance(current_node, self.start_node) < 1e-6 or \
                            self._distance(current_node, self.target_node) < 1e-6 :
-                            factor = 1.0 
-                        else: 
-                            factor = 0.1 
+                            factor = 1.0
+                        else:
+                            factor = 0.1
                     else:
                         factor = dsT / denominator
-                    
+
                     pheromones[r, c] = factor * self.C0_base
                     if pheromones[r, c] < 1e-9:
                         pheromones[r, c] = 1e-9
@@ -97,46 +97,89 @@ class MAACO:
     def _get_all_potential_neighbor_moves(self):
         return [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
+    def _is_diagonal_corner_cut(self, r_curr, c_curr, r_next, c_next):
+        """
+        Kiểm tra xem một bước đi chéo từ (r_curr, c_curr) đến (r_next, c_next)
+        có "cắt góc" của một vật cản hay không.
+        Điều này xảy ra nếu một trong hai ô (r_next, c_curr) hoặc (r_curr, c_next) là vật cản.
+        Hàm này giả định (r_curr, c_curr) và (r_next, c_next) là các tọa độ hợp lệ
+        và bước đi là chéo.
+        """
+        # Các ô trung gian tạo thành "góc"
+        # Ô 1: (r_next, c_curr)
+        # Ô 2: (r_curr, c_next)
+
+        # Kiểm tra xem ô (r_next, c_curr) có phải là vật cản không
+        if self.grid[r_next, c_curr] == OBSTACLE:
+            return True # Cắt góc qua vật cản (r_next, c_curr)
+
+        # Kiểm tra xem ô (r_curr, c_next) có phải là vật cản không
+        if self.grid[r_curr, c_next] == OBSTACLE:
+            return True # Cắt góc qua vật cản (r_curr, c_next)
+
+        return False # Không cắt góc
+
     def _apply_orientation_heuristic_filter(self, current_node_P, tabu_list):
-        cr, cc = current_node_P
+        cr, cc = current_node_P # Current row, current col
         delta_r_ST = self.target_node[0] - self.start_node[0]
         delta_c_ST = self.target_node[1] - self.start_node[1]
         oriented_neighbors = []
         all_moves = self._get_all_potential_neighbor_moves()
 
-        for dr_PPn, dc_PPn in all_moves:
-            nr, nc = cr + dr_PPn, cc + dc_PPn
-            if not self._is_valid_and_not_tabu(nr, nc, tabu_list):
-                continue
-            valid_orientation = True
-            if delta_c_ST > 0 and dc_PPn < 0: valid_orientation = False
-            if delta_c_ST < 0 and dc_PPn > 0: valid_orientation = False
-            if delta_r_ST > 0 and dr_PPn < 0: valid_orientation = False
-            if delta_r_ST < 0 and dr_PPn > 0: valid_orientation = False
-            if valid_orientation:
-                oriented_neighbors.append((nr, nc))
+        # --- Helper function for filtering moves ---
+        def filter_moves_logic(moves_to_check, use_ST_orientation_vector):
+            local_neighbors_list = []
+            for dr_move, dc_move in moves_to_check: # dr_move, dc_move are deltas
+                nr, nc = cr + dr_move, cc + dc_move # next row, next col
 
-        if not oriented_neighbors:
-            delta_r_PT = self.target_node[0] - cr
-            delta_c_PT = self.target_node[1] - cc
-            for dr_PPn, dc_PPn in all_moves:
-                nr, nc = cr + dr_PPn, cc + dc_PPn
                 if not self._is_valid_and_not_tabu(nr, nc, tabu_list):
                     continue
-                valid_orientation_pt = True
-                if delta_c_PT > 0 and dc_PPn < 0: valid_orientation_pt = False
-                if delta_c_PT < 0 and dc_PPn > 0: valid_orientation_pt = False
-                if delta_r_PT > 0 and dr_PPn < 0: valid_orientation_pt = False
-                if delta_r_PT < 0 and dr_PPn > 0: valid_orientation_pt = False
-                if valid_orientation_pt:
-                    oriented_neighbors.append((nr, nc))
 
+                # <<< --- LOGIC CẤM ĐI CHÉO CẮT GÓC VẬT CẢN --- >>>
+                is_diagonal = (abs(dr_move) == 1 and abs(dc_move) == 1)
+                if is_diagonal:
+                    if self._is_diagonal_corner_cut(cr, cc, nr, nc):
+                        continue # Bỏ qua nước đi này vì nó cắt góc vật cản
+                # <<< --- KẾT THÚC LOGIC CẤM ĐI CHÉO --- >>>
+
+                passes_orientation_check = True
+                if use_ST_orientation_vector: # Lọc dựa trên vector Start-Target
+                    if delta_c_ST > 0 and dc_move < 0: passes_orientation_check = False
+                    if delta_c_ST < 0 and dc_move > 0: passes_orientation_check = False
+                    if delta_r_ST > 0 and dr_move < 0: passes_orientation_check = False
+                    if delta_r_ST < 0 and dr_move > 0: passes_orientation_check = False
+                else: # Lọc dựa trên vector Current-Target
+                    delta_r_PT = self.target_node[0] - cr
+                    delta_c_PT = self.target_node[1] - cc
+                    if delta_c_PT > 0 and dc_move < 0: passes_orientation_check = False
+                    if delta_c_PT < 0 and dc_move > 0: passes_orientation_check = False
+                    if delta_r_PT > 0 and dr_move < 0: passes_orientation_check = False
+                    if delta_r_PT < 0 and dr_move > 0: passes_orientation_check = False
+
+                if passes_orientation_check:
+                    local_neighbors_list.append((nr, nc))
+            return local_neighbors_list
+        # --- End of helper function ---
+
+        # Chiến lược 1: Lọc theo hướng Start -> Target
+        oriented_neighbors = filter_moves_logic(all_moves, use_ST_orientation_vector=True)
+
+        # Chiến lược 2: Nếu không có, lọc theo hướng Current -> Target
+        if not oriented_neighbors:
+            oriented_neighbors = filter_moves_logic(all_moves, use_ST_orientation_vector=False)
+
+        # Chiến lược 3: Nếu vẫn không có, lấy tất cả các nước đi hợp lệ (đã được lọc cấm cắt góc)
         if not oriented_neighbors:
              for dr, dc in all_moves:
                 nr, nc = cr + dr, cc + dc
                 if self._is_valid_and_not_tabu(nr, nc, tabu_list):
+                    is_diag_fallback = (abs(dr) == 1 and abs(dc) == 1)
+                    if is_diag_fallback:
+                        if self._is_diagonal_corner_cut(cr, cc, nr, nc):
+                            continue
                     oriented_neighbors.append((nr, nc))
         return oriented_neighbors
+
 
     def _calculate_turn_penalty_factor_c_i(self, ant_path_history, next_node_candidate):
         if len(ant_path_history) < 2:
@@ -170,12 +213,12 @@ class MAACO:
         K_total_iter = self.num_iterations
         k_curr_iter = current_iteration_num
         k0_thresh_iter = self.k0_iter_threshold_factor * K_total_iter
-        if k_curr_iter < k0_thresh_iter:       
+        if k_curr_iter < k0_thresh_iter:
             if abs(K_total_iter - k0_thresh_iter) < 1e-6 :
                  q0_val = self.q0_initial
-            else:  
+            else:
                  q0_val = ((K_total_iter - k_curr_iter) / K_total_iter) * self.q0_initial
-        else: 
+        else:
             q0_at_k0 = ((K_total_iter - k0_thresh_iter) / K_total_iter) * self.q0_initial
             q0_val = q0_at_k0 + \
                      ((k_curr_iter - k0_thresh_iter) / (K_total_iter - k0_thresh_iter + 1e-9)) * \
@@ -212,10 +255,10 @@ class MAACO:
             probabilities = [attr / sum_attractiveness for attr in attractiveness_values]
             try:
                 if abs(sum(probabilities) - 1.0) > 1e-6:
-                    probabilities = [p / sum(probabilities) for p in probabilities]
+                    probabilities = [p / sum(probabilities) for p in probabilities] # Normalize
                 selected_idx = np.random.choice(len(available_neighbors), p=probabilities)
                 return available_neighbors[selected_idx]
-            except ValueError:
+            except ValueError: # Fallback if probabilities are still problematic
                 return random.choice(available_neighbors) if available_neighbors else None
 
     def _count_turns(self, path):
@@ -272,8 +315,14 @@ class MAACO:
         if current_best_len_for_tau < 1e-6:
             current_best_len_for_tau = 1e-6
         tau_max_mmas = (1.0 / (1.0 - self.rho)) * (1.0 / current_best_len_for_tau)
+        # tau_max_to_use = tau_max_mmas # Original line from your code
+        # Consider C0_base as an upper bound as well if needed, or MAACO specific tau_max if paper defines one.
+        # For MMAS-style, tau_max is usually not additionally capped by C0_base after calculation.
         tau_max_to_use = tau_max_mmas
-        tau_min_to_use = tau_max_to_use / (2.0 * self.cols)
+
+        tau_min_to_use = tau_max_to_use / (2.0 * max(self.cols, self.rows, 1)) # Avoid division by zero for 1xN grids
+        # tau_min_to_use = max(tau_min_to_use, 1e-10) # Ensure tau_min is a very small positive number
+
         mask_free_space = (self.grid != OBSTACLE)
         self.pheromone_matrix[mask_free_space] = np.clip(
             self.pheromone_matrix[mask_free_space],
@@ -322,9 +371,7 @@ class MAACO:
         return self.best_path_overall, self.best_path_length_overall, self.best_path_turns_overall
 
     def visualize_pheromone_matrix(self, title="Mức Pheromone MAACO"):
-        # Call the static function from visualization.py
         visualize_pheromone_static(self.grid, self.pheromone_matrix, title)
 
     def plot_convergence_curve(self):
-        # Call the static function from visualization.py
         plot_convergence_static(self.convergence_curve_data, "MAACO", color='orangered')
