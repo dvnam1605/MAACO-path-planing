@@ -1,13 +1,13 @@
 # Grid Pathfinding Algorithms: Improved MAACO & MPA
 
-## 🧭 Giới thiệu
+## 🧭 Introduction
 
-Đây là repo chứa cài đặt hai thuật toán tìm đường cho môi trường lưới:
+This is the repo containing the implementation of two pathfinding algorithms for grid environments.
 
-- **MAACO cải tiến** (Modified Adaptive Ant Colony Optimization): phiên bản mở rộng của ACO với cơ chế **cấm đi chéo**, nhằm đảm bảo đường đi hợp lệ và chính xác trong môi trường lưới có chướng ngại vật.
-- **MPA (Marine Predators Algorithm)**: thuật toán lấy cảm hứng từ hành vi săn mồi của động vật biển, được áp dụng để tìm đường đi ngắn nhất trong môi trường rời rạc.
-
-Cả hai thuật toán được thiết kế để hoạt động hiệu quả trên **bản đồ dạng lưới (grid map)** với các ô trống (di chuyển được) và ô tường (chướng ngại vật).
+- **MAACO improvement** (Modified Adaptive Ant Colony Optimization): an extended version of ACO with a **crossing prohibition mechanism**, aimed at ensuring valid and accurate paths in a grid environment with obstacles..
+- **MPA (Marine Predators Algorithm)**: an algorithm inspired by the hunting behavior of marine animals, applied to find the shortest path in a discrete environment.
+  
+Both algorithms are designed to operate efficiently on a **grid map** with empty cells (movable) and wall cells (obstacles).
 
 ---
 
